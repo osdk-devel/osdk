@@ -10,6 +10,18 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
+build*/
+.*/
+*.log
+*.exe
+*.dll
+*.o
+*.obj
+*.so
+*.dylib
+*.lib
+*.a
+*.pdb
 
 # CLion
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
