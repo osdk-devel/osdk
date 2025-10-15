@@ -28,7 +28,7 @@
 #include <string>
 #include "tokens.h"
 
-class Lexer {
+class CLexer {
 public:
     size_t pos;
     int line;
@@ -37,7 +37,7 @@ public:
      * Constructor - initializes the lexer with input text
      * @param input The source code to tokenize
      */
-    Lexer(const std::string& input);
+    CLexer(const std::string& input);
     
     /**
      * Peek at the next character without consuming it
