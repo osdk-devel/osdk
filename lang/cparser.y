@@ -1,9 +1,35 @@
 %{
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
+/*
+ * MIT License
+ * Copyright (c) 2025 First Person
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cstdarg>
+#include <string>
+#include <list>
+#include <iostream>
+
 #include "clexer.h"
+
+using namespace std;
 
 extern int yylex();
 extern char* yytext;
@@ -12,6 +38,8 @@ extern int yylineno;
 void yyerror(const char* s);
 void emit_asm(const char* fmt, ...);
 
+extern list<string> assemblies;
+
 // Symbol table
 typedef struct symbol {
     char name[256];
@@ -19,7 +47,7 @@ typedef struct symbol {
     struct symbol* next;
 } symbol_t;
 
-symbol_t* symtab = NULL;
+symbol_t* symtab = nullptr;
 int stack_offset = 0;
 int label_counter = 0;
 
@@ -256,15 +284,18 @@ void yyerror(const char* s) {
 }
 
 void emit_asm(const char* fmt, ...) {
+    char buffer[1024];
     va_list args;
     va_start(args, fmt);
-    vprintf(fmt, args);
-    printf("\n");
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
+
+    printf("%s\n", buffer);
+    assemblies.push_back(buffer);
 }
 
 void add_symbol(const char* name) {
-    symbol_t* sym = malloc(sizeof(symbol_t));
+    symbol_t* sym = (symbol_t*) malloc(sizeof(symbol_t));
     strcpy(sym->name, name);
     stack_offset += 8;
     sym->offset = stack_offset;
