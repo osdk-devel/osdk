@@ -34,11 +34,13 @@ using namespace std;
 extern int yylex();
 extern char* yytext;
 extern int yylineno;
+extern FILE* yyin;
 
 void yyerror(const char* s);
 void emit_asm(const char* fmt, ...);
 
 extern list<string> assemblies;
+string current_filename = "<input>";
 
 // Symbol table
 typedef struct symbol {
@@ -66,17 +68,53 @@ int get_new_label(void);
 %token <str> TOKEN_IDENTIFIER
 %token <num> TOKEN_NUMBER
 
-%token TOKEN_KEYWORD_INT TOKEN_KEYWORD_IF TOKEN_KEYWORD_ELSE TOKEN_KEYWORD_WHILE TOKEN_KEYWORD_RETURN
-%token TOKEN_PLUS TOKEN_MINUS TOKEN_ASTERISK TOKEN_SLASH TOKEN_EQUAL
-%token TOKEN_LESS_THAN TOKEN_GREATER_THAN TOKEN_EQUAL_EQUAL TOKEN_NOT_EQUAL
+// Keywords - C89/C90
+%token TOKEN_KEYWORD_AUTO TOKEN_KEYWORD_BREAK TOKEN_KEYWORD_CASE TOKEN_KEYWORD_CHAR
+%token TOKEN_KEYWORD_CONST TOKEN_KEYWORD_CONTINUE TOKEN_KEYWORD_DEFAULT TOKEN_KEYWORD_DO
+%token TOKEN_KEYWORD_DOUBLE TOKEN_KEYWORD_ELSE TOKEN_KEYWORD_ENUM TOKEN_KEYWORD_EXTERN
+%token TOKEN_KEYWORD_FLOAT TOKEN_KEYWORD_FOR TOKEN_KEYWORD_GOTO TOKEN_KEYWORD_IF
+%token TOKEN_KEYWORD_INT TOKEN_KEYWORD_LONG TOKEN_KEYWORD_REGISTER TOKEN_KEYWORD_RETURN
+%token TOKEN_KEYWORD_SHORT TOKEN_KEYWORD_SIGNED TOKEN_KEYWORD_SIZEOF TOKEN_KEYWORD_STATIC
+%token TOKEN_KEYWORD_STRUCT TOKEN_KEYWORD_SWITCH TOKEN_KEYWORD_TYPEDEF TOKEN_KEYWORD_UNION
+%token TOKEN_KEYWORD_UNSIGNED TOKEN_KEYWORD_VOID TOKEN_KEYWORD_VOLATILE TOKEN_KEYWORD_WHILE
+
+// Keywords - C99
+%token TOKEN_KEYWORD_INLINE TOKEN_KEYWORD_RESTRICT
+
+// Keywords - C11
+%token TOKEN_KEYWORD_ALIGNAS TOKEN_KEYWORD_ALIGNOF TOKEN_KEYWORD_ATOMIC TOKEN_KEYWORD_BOOL
+%token TOKEN_KEYWORD_COMPLEX TOKEN_KEYWORD_GENERIC TOKEN_KEYWORD_IMAGINARY TOKEN_KEYWORD_NORETURN
+%token TOKEN_KEYWORD_STATIC_ASSERT TOKEN_KEYWORD_THREAD_LOCAL
+
+// Operators
+%token TOKEN_PLUS TOKEN_MINUS TOKEN_ASTERISK TOKEN_SLASH TOKEN_PERCENT
+%token TOKEN_EQUAL TOKEN_PLUS_EQUAL TOKEN_MINUS_EQUAL TOKEN_ASTERISK_EQUAL
+%token TOKEN_SLASH_EQUAL TOKEN_PERCENT_EQUAL
+%token TOKEN_INCREMENT TOKEN_DECREMENT
+%token TOKEN_AMPERSAND TOKEN_AMPERSAND_EQUAL TOKEN_BITWISE_OR TOKEN_BITWISE_OR_EQUAL
+%token TOKEN_BITWISE_XOR TOKEN_BITWISE_XOR_EQUAL TOKEN_BITWISE_NOT
+%token TOKEN_SHIFT_LEFT TOKEN_SHIFT_RIGHT TOKEN_SHIFT_LEFT_EQUAL TOKEN_SHIFT_RIGHT_EQUAL
+%token TOKEN_LOGICAL_AND TOKEN_LOGICAL_OR TOKEN_LOGICAL_NOT
+%token TOKEN_LESS_THAN TOKEN_GREATER_THAN TOKEN_LESS_THAN_EQUAL TOKEN_GREATER_THAN_EQUAL
+%token TOKEN_EQUAL_EQUAL TOKEN_NOT_EQUAL
+
+// Delimiters
 %token TOKEN_PARENTHESIS_OPEN TOKEN_PARENTHESIS_CLOSE
 %token TOKEN_BRACE_OPEN TOKEN_BRACE_CLOSE
-%token TOKEN_SEMICOLON
-%token TOKEN_INCREMENT TOKEN_DECREMENT
-%token TOKEN_PLUS_EQUAL TOKEN_MINUS_EQUAL
+%token TOKEN_BRACKET_OPEN TOKEN_BRACKET_CLOSE
+
+// Punctuation
+%token TOKEN_SEMICOLON TOKEN_COLON TOKEN_COMMA TOKEN_DOT TOKEN_ELLIPSIS
+%token TOKEN_HASH TOKEN_ARROW TOKEN_QUESTION
+
+// Literals
+%token TOKEN_CHARACTER TOKEN_STRING
+
+// Miscellaneous
+%token TOKEN_UNKNOWN
 
 %type <num> expression term factor
-%type <str> identifier
+%type <str> identifier type_specifier
 
 %left TOKEN_PLUS TOKEN_MINUS
 %left TOKEN_ASTERISK TOKEN_SLASH
@@ -86,7 +124,37 @@ int get_new_label(void);
 
 program:
       /* empty */
-    | program statement
+    | program external_declaration
+    ;
+
+external_declaration:
+      function_definition
+    | declaration
+    ;
+
+function_definition:
+      type_specifier identifier TOKEN_PARENTHESIS_OPEN parameter_list TOKEN_PARENTHESIS_CLOSE compound_statement
+    {
+        emit_asm("; end function %s", $2);
+    }
+    | type_specifier identifier TOKEN_PARENTHESIS_OPEN TOKEN_PARENTHESIS_CLOSE compound_statement
+    {
+        emit_asm("; function %s() {", $2);
+        emit_asm("; end function %s", $2);
+    }
+    ;
+
+parameter_list:
+      type_specifier identifier
+    | parameter_list TOKEN_COMMA type_specifier identifier
+    ;
+
+type_specifier:
+      TOKEN_KEYWORD_INT { strcpy($$, "int"); }
+    | TOKEN_KEYWORD_VOID { strcpy($$, "void"); }
+    | TOKEN_KEYWORD_CHAR { strcpy($$, "char"); }
+    | TOKEN_KEYWORD_FLOAT { strcpy($$, "float"); }
+    | TOKEN_KEYWORD_DOUBLE { strcpy($$, "double"); }
     ;
 
 statement:
@@ -280,7 +348,47 @@ return_statement:
 %%
 
 void yyerror(const char* s) {
-    fprintf(stderr, "Error at line %d: %s\n", yylineno, s);
+    // Get current position in file to show context
+    long current_pos = ftell(yyin);
+    
+    // Try to read the current line for context
+    fseek(yyin, 0, SEEK_SET);
+    char line_buffer[1024];
+    int line_num = 1;
+    string error_line = "";
+    
+    while (fgets(line_buffer, sizeof(line_buffer), yyin) && line_num <= yylineno) {
+        if (line_num == yylineno) {
+            error_line = line_buffer;
+            // Remove trailing newline
+            if (!error_line.empty() && error_line[error_line.length()-1] == '\n') {
+                error_line.erase(error_line.length()-1);
+            }
+            break;
+        }
+        line_num++;
+    }
+    
+    // Restore file position
+    fseek(yyin, current_pos, SEEK_SET);
+    
+    // Print gcc-like error message
+    fprintf(stderr, "\033[1m%s:%d:1: \033[31merror:\033[0m %s\n", 
+            current_filename.c_str(), yylineno, s);
+    
+    if (!error_line.empty()) {
+        fprintf(stderr, " %4d | %s\n", yylineno, error_line.c_str());
+        fprintf(stderr, "      | \033[31m^\033[0m\n");
+    }
+    
+    // Additional hint for common errors
+    if (strstr(s, "syntax error")) {
+        if (strstr(yytext, "void") || strstr(yytext, "main")) {
+            fprintf(stderr, "\033[1mnote:\033[0m unexpected token '%s'\n", yytext);
+        } else {
+            fprintf(stderr, "\033[1mnote:\033[0m near token '%s'\n", yytext);
+        }
+    }
 }
 
 void emit_asm(const char* fmt, ...) {

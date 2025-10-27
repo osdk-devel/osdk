@@ -60,6 +60,7 @@ using namespace std;
 
 extern FILE *yyin;
 extern int yyparse(void);
+extern string current_filename;
 string executeableName = "osdk";
 list<string> assemblies;
 
@@ -90,6 +91,9 @@ bool compileFile(const string& inputPath) {
     }
 
     cout << "[OSDK] Compiling " << inputPath << "..." << endl;
+    
+    // Set filename for error reporting
+    current_filename = inputPath;
 
     // Run parser
     int result = yyparse();

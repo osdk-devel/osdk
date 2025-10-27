@@ -23,9 +23,10 @@
  * SOFTWARE.
  */
 
-#include "tokens.h"
+#include "cparser.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* Global variables for tracking line and column */
 int yyline = 1;
@@ -105,16 +106,16 @@ NEWLINE         \n
 "_Thread_local"         { return TOKEN_KEYWORD_THREAD_LOCAL; }
 
     /* Identifiers and literals */
-{IDENTIFIER}            { return TOKEN_IDENTIFIER; }
-{INTEGER}               { return TOKEN_NUMBER; }
+{IDENTIFIER}            { strncpy(yylval.str, yytext, 255); yylval.str[255] = '\0'; return TOKEN_IDENTIFIER; }
+{INTEGER}               { yylval.num = atoi(yytext); return TOKEN_NUMBER; }
 
     /* Character and string literals */
 '(\\.|[^\\'\n])'        { return TOKEN_CHARACTER; }
 \"(\\.|[^\\"\n])*\"     { return TOKEN_STRING; }
 
     /* Comments */
-"//".*                  { return TOKEN_COMMENT; }
-"/*"([^*]|(\*+[^*/]))*\*+"/" { return TOKEN_COMMENT; }
+"//".*                  { /* Skip single-line comments */ }
+"/*"([^*]|(\*+[^*/]))*\*+"/" { /* Skip multi-line comments */ }
 
     /* Three-character operators */
 "..."                   { return TOKEN_ELLIPSIS; }
