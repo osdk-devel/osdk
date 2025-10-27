@@ -101,6 +101,10 @@ bool compileFile(const string& inputPath) {
     fclose(yyin);
 
     if (result == 0) {
+        // Print generated assembly
+        for (const string& assembly : assemblies) {
+            cout << assembly << endl;
+        }
         cout << "[OK] Compilation successful." << endl;
         return true;
     } else {
