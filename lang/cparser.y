@@ -133,13 +133,20 @@ external_declaration:
     ;
 
 function_definition:
-      type_specifier identifier TOKEN_PARENTHESIS_OPEN parameter_list TOKEN_PARENTHESIS_CLOSE compound_statement
+      type_specifier identifier TOKEN_PARENTHESIS_OPEN parameter_list TOKEN_PARENTHESIS_CLOSE 
+    {
+        emit_asm(".%s", strcmp($2, "main") == 0 ? "start" : $2);
+    }
+    compound_statement
     {
         emit_asm("; end function %s", $2);
     }
-    | type_specifier identifier TOKEN_PARENTHESIS_OPEN TOKEN_PARENTHESIS_CLOSE compound_statement
+    | type_specifier identifier TOKEN_PARENTHESIS_OPEN TOKEN_PARENTHESIS_CLOSE 
     {
-        emit_asm("; function %s() {", $2);
+        emit_asm(".%s", strcmp($2, "main") == 0 ? "start" : $2);
+    }
+    compound_statement
+    {
         emit_asm("; end function %s", $2);
     }
     ;
@@ -398,7 +405,6 @@ void emit_asm(const char* fmt, ...) {
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
 
-    printf("%s\n", buffer);
     assemblies.push_back(buffer);
 }
 
