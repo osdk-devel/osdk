@@ -25,47 +25,21 @@
 #include <list>
 #include <fstream>
 #include <filesystem>
+#include <random>
+#include <chrono>
 
 using namespace std;
+namespace fs = std::filesystem;
 
 // #define VERSION "N/A"
-/*
- * Version Macro Decleared By CMAKE Build System
- * Please Don't Decleare VERSION Macro Variable
- * Because I Use Dynamic Version
- * 
- * Try:
- * mkdir build && cd build
- * cmake ..
- * make
- * 
- * Output of make command:
- * firstperson@Acer-Aspire-4749Z:~/osdk/build$ make
- * [ 12%] Generating cparser from /home/firstperson/osdk/lang/cparser.y
- * /home/firstperson/osdk/lang/cparser.y: warning: 1 shift/reduce conflict [-Wconflicts-sr]
- * /home/firstperson/osdk/lang/cparser.y: note: rerun with option '-Wcounterexamples' to generate conflict counterexamples
- * [ 12%] Built target generate_cparser
- * [ 25%] Generating clexer from /home/firstperson/osdk/lang/clexer.l
- * [ 25%] Built target generate_clexer
- * [ 25%] Built target generate_all
- * [ 37%] Building CXX object CMakeFiles/osdk.dir/src/main.cpp.o
- * [ 50%] Building CXX object CMakeFiles/osdk.dir/src/cparser.cpp.o
- * [ 62%] Building CXX object CMakeFiles/osdk.dir/src/clexer.cpp.o
- * /home/firstperson/osdk/build/src/clexer.cpp:1845:17: warning: ‘void yyunput(int, char*)’ defined but not used [-Wunused-function]
- * 1845 |     static void yyunput (int c, char * yy_bp )
- *      |                 ^~~~~~~
- * [ 75%] Linking CXX executable bin/osdk
- * [100%] Built target osdk
- */
 
 extern FILE *yyin;
 extern int yyparse(void);
-extern string current_filename;
-string executeableName = "osdk";
+string executeableName = "sosdk";
 list<string> assemblies;
 
 void printHelp(string help) {
-    cout << "OSDK Version " << VERSION << endl;
+    cout << "SOSDK Version " << VERSION << endl;
     cout << "Copyright (c) 2025 First Person" << endl << endl;
     cout << "Usage: " << executeableName << " [options] <input|output|argument>" << endl;
     cout << "Options:" << endl;
@@ -84,33 +58,55 @@ void printHelp(string help) {
 }
 
 bool compileFile(const string& inputPath) {
+    fs::path p(inputPath);
+    std::string basename = p.stem().string();
+    
     yyin = fopen(inputPath.c_str(), "r");
     if (!yyin) {
         cerr << "Error: cannot open file '" << inputPath << "'" << endl;
         return false;
     }
 
-    cout << "[OSDK] Compiling " << inputPath << "..." << endl;
-    
-    // Set filename for error reporting
-    current_filename = inputPath;
+    cout << "[SOSDK] Compiling " << inputPath << "..." << endl;
 
     // Run parser
     int result = yyparse();
 
     fclose(yyin);
 
-    if (result == 0) {
-        // Print generated assembly
-        for (const string& assembly : assemblies) {
-            cout << assembly << endl;
-        }
-        cout << "[OK] Compilation successful." << endl;
-        return true;
-    } else {
+    if (result != 0) {
         cerr << "[ERROR] Compilation failed." << endl;
         return false;
     }
+
+    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    std::default_random_engine generator(seed);
+    std::uniform_int_distribution<int> distribution(10000000, 99999999);
+    int UNIQUE_ID = distribution(generator);
+
+    ofstream outputFile("TMP" + std::to_string(UNIQUE_ID) + ".asm");
+    if (!outputFile.is_open()) {
+        cerr << "Failed to open output file." << endl;
+        return false;
+    }
+
+    for (const auto& assembly : assemblies) {
+        outputFile << assembly << endl;
+    }
+
+    // Add bootloader signature and padding
+    outputFile << "    times 510-($-$$) db 0" << endl;
+    outputFile << "    dw 0xAA55" << endl;
+
+    outputFile.close();
+
+    string cmd1 = "nasm -f bin TMP" + std::to_string(UNIQUE_ID) + ".asm -o " + basename + ".bin";
+    if (system(cmd1.c_str()) != 0) {
+        cerr << "nasm command failed" << endl;
+        return false;
+    }
+
+    return true;
 }
 
 int main(int argc, char* argv[]) {
@@ -128,22 +124,26 @@ int main(int argc, char* argv[]) {
 
     if (argLower == "--help" || argLower == "--h") {
         printHelp("main");
-    } else if (argLower == "--version" || argLower == "--v") {
-        cout << "OSDK Version " << VERSION << endl;
+    } else if (argLower == "--version" || argLower == "-v") {
+        cout << "SOSDK Version " << VERSION << endl;
     }
     else {
-        // Fix: Check if arg is already a path (absolute or relative)
-        filesystem::path inputPath(arg);
+        // Check if arg is already a path (absolute or relative)
+        fs::path inputPath(arg);
         
         // If it's a relative path or filename, check if it exists as-is
-        if (filesystem::exists(inputPath)) {
-            compileFile(inputPath.string());
+        if (fs::exists(inputPath)) {
+            if (!compileFile(inputPath.string())) {
+                return 1;
+            }
         }
         // Otherwise try in current directory
         else {
-            inputPath = filesystem::current_path() / arg;
-            if (filesystem::exists(inputPath)) {
-                compileFile(inputPath.string());
+            inputPath = fs::current_path() / arg;
+            if (fs::exists(inputPath)) {
+                if (!compileFile(inputPath.string())) {
+                    return 1;
+                }
             }
             else {
                 cout << "Error: file not found '" << arg << "'" << endl;

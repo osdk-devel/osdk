@@ -1,2 +1,2 @@
-# osdk
-Operating System Development Kit
+# sosdk
+Slandone Operating System Development Kit

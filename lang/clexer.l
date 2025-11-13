@@ -46,6 +46,7 @@ DIGIT           [0-9]
 LETTER          [a-zA-Z_]
 IDENTIFIER      {LETTER}({LETTER}|{DIGIT})*
 INTEGER         {DIGIT}+
+FLOAT           {DIGIT}+\.{DIGIT}+([eE][+-]?{DIGIT}+)?[fFlL]?
 WHITESPACE      [ \t\r]+
 NEWLINE         \n
 
@@ -105,8 +106,21 @@ NEWLINE         \n
 "_Static_assert"        { return TOKEN_KEYWORD_STATIC_ASSERT; }
 "_Thread_local"         { return TOKEN_KEYWORD_THREAD_LOCAL; }
 
+    /* Keywords - C23 */
+"_BitInt"               { return TOKEN_KEYWORD_BITINT; }
+"_Decimal128"           { return TOKEN_KEYWORD_DECIMAL128; }
+"_Decimal32"            { return TOKEN_KEYWORD_DECIMAL32; }
+"_Decimal64"            { return TOKEN_KEYWORD_DECIMAL64; }
+"typeof"                { return TOKEN_KEYWORD_TYPEOF; }
+"typeof_unqual"         { return TOKEN_KEYWORD_TYPEOF_UNQUAL; }
+"constexpr"             { return TOKEN_KEYWORD_CONSTEXPR; }
+"nullptr"               { return TOKEN_KEYWORD_NULLPTR; }
+"true"                  { return TOKEN_KEYWORD_TRUE; }
+"false"                 { return TOKEN_KEYWORD_FALSE; }
+
     /* Identifiers and literals */
 {IDENTIFIER}            { strncpy(yylval.str, yytext, 255); yylval.str[255] = '\0'; return TOKEN_IDENTIFIER; }
+{FLOAT}                 { yylval.num = (int)atof(yytext); return TOKEN_NUMBER; }
 {INTEGER}               { yylval.num = atoi(yytext); return TOKEN_NUMBER; }
 
     /* Character and string literals */
@@ -114,8 +128,8 @@ NEWLINE         \n
 \"(\\.|[^\\"\n])*\"     { return TOKEN_STRING; }
 
     /* Comments */
-"//".*                  { /* Skip single-line comments */ }
-"/*"([^*]|(\*+[^*/]))*\*+"/" { /* Skip multi-line comments */ }
+"//".*                  { return TOKEN_COMMENT; }
+"/*"([^*]|(\*+[^*/]))*\*+"/" { return TOKEN_COMMENT; }
 
     /* Three-character operators */
 "..."                   { return TOKEN_ELLIPSIS; }
